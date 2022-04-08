@@ -364,7 +364,8 @@ pub fn log_stderr(log_level: SrLogLevel) {
 
 /// Set Log Syslog.
 pub fn log_syslog(app_name: &str, log_level: SrLogLevel) {
-    let app_name = app_name.as_ptr() as *const i8;
+    let app_name = CString::new(app_name).unwrap();
+    let app_name = app_name.as_ptr() as *const c_char;
     unsafe {
         sr_log_syslog(app_name, log_level as u32);
     }
@@ -510,7 +511,8 @@ impl SrSession {
         timeout: Option<Duration>,
         opts: u32,
     ) -> Result<SrValueSlice, i32> {
-        let xpath = xpath.as_ptr() as *const i8;
+        let xpath = CString::new(xpath).unwrap();
+        let xpath = xpath.as_ptr() as * const c_char;
         let timeout_ms = timeout.map_or(0, |timeout| timeout.as_millis() as u32);
         let mut values_count: u64 = 0;
         let mut values: *mut sr_val_t = unsafe { zeroed::<*mut sr_val_t>() };
@@ -540,10 +542,16 @@ impl SrSession {
         origin: Option<&str>,
         opts: u32,
     ) -> Result<(), i32> {
-        let path = path.as_ptr() as *const i8;
-        let value = value.as_ptr() as *const i8;
+        let path = CString::new(path).unwrap();
+        let path = path.as_ptr() as *const c_char;
+
+        let value = CString::new(value).unwrap();
+        let value = value.as_ptr() as *const c_char;
         let origin = match origin {
-            Some(orig) => orig.as_ptr() as *const i8,
+            Some(orig) => {
+                let orig = CString::new(orig).unwrap();
+                orig.as_ptr() as *const c_char
+            },
             None => std::ptr::null(),
         };
 
@@ -580,8 +588,11 @@ impl SrSession {
     where
         F: FnMut(SrSession, u32, SrNotifType, &str, SrValueSlice, *mut timespec) + 'static,
     {
-        let mod_name = mod_name.as_ptr() as *const i8;
-        let xpath = xpath.map_or(std::ptr::null_mut(), |xpath| xpath.as_ptr() as *mut i8);
+        let mod_name = CString::new(mod_name).unwrap();
+        let mod_name = mod_name.as_ptr() as *const c_char;
+        let xpath = xpath.map_or(std::ptr::null(),
+                                 |xpath| {let xpath=CString::new(xpath).unwrap();
+                                     xpath.as_ptr() as *const c_char});
         let start_time = start_time.unwrap_or(std::ptr::null_mut());
         let stop_time = stop_time.unwrap_or(std::ptr::null_mut());
 
@@ -651,7 +662,8 @@ impl SrSession {
         let rc = unsafe {
             match xpath {
                 Some(xpath) => {
-                    let xpath = xpath.as_ptr() as *mut i8;
+                    let xpath = CString::new(xpath).unwrap();
+                    let xpath = xpath.as_ptr() as *const c_char;
                     sr_rpc_subscribe(
                         self.sess,
                         xpath,
@@ -726,8 +738,10 @@ impl SrSession {
         let mut subscr: *mut sr_subscription_ctx_t =
             unsafe { zeroed::<*mut sr_subscription_ctx_t>() };
         let data = Box::into_raw(Box::new(callback));
-        let mod_name = mod_name.as_ptr() as *mut i8;
-        let path = path.as_ptr() as *mut i8;
+        let mod_name = CString::new(mod_name).unwrap();
+        let mod_name = mod_name.as_ptr() as *const c_char;
+        let path = CString::new(path).unwrap();
+        let path = path.as_ptr() as *const c_char;
 
         let rc = unsafe {
             sr_oper_get_subscribe(
@@ -803,8 +817,12 @@ impl SrSession {
         let mut subscr: *mut sr_subscription_ctx_t =
             unsafe { zeroed::<*mut sr_subscription_ctx_t>() };
         let data = Box::into_raw(Box::new(callback));
-        let mod_name = mod_name.as_ptr() as *mut i8;
-        let path = path.map_or(std::ptr::null_mut(), |path| path.as_ptr() as *mut i8);
+        let mod_name = CString::new(mod_name).unwrap();
+        let mod_name = mod_name.as_ptr() as *const c_char;
+        let path = path.map_or(std::ptr::null(),
+                               |path| {
+                                   let path = CString::new(path).unwrap();
+                                   path.as_ptr() as *const c_char});
 
         let rc = unsafe {
             sr_module_change_subscribe(
@@ -861,7 +879,7 @@ impl SrSession {
         let mut it = unsafe { zeroed::<*mut sr_change_iter_t>() };
         let rc = unsafe {
             let path = CString::new(path).unwrap();
-            let path = path.as_ptr() as *const i8;
+            let path = path.as_ptr() as *const c_char;
 
             sr_get_changes_iter(self.sess, path, &mut it)
         };
@@ -895,7 +913,8 @@ impl SrSession {
         input: Option<Vec<sr_val_t>>,
         timeout: Option<Duration>,
     ) -> Result<SrValueSlice, i32> {
-        let path = path.as_ptr() as *mut i8;
+        let path = CString::new(path).unwrap();
+        let path = path.as_ptr() as *const c_char;
         let (input, input_cnt) = match input {
             Some(mut input) => (input.as_mut_ptr(), input.len() as u64),
             None => (std::ptr::null_mut(), 0),
@@ -1124,7 +1143,7 @@ impl LibYang {
             ly_ctx.get_ctx() as *mut ly_ctx
         });
         let path = CString::new(path).unwrap();
-        let path = path.as_ptr() as *const _ as *const i8;
+        let path = path.as_ptr() as *const _ as *const c_char;
         let mut node: *mut lyd_node = unsafe { zeroed::<*mut lyd_node>() };
 
 
